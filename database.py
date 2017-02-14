@@ -18,6 +18,11 @@ def make_pw_hash(name, pw, salt = None):
         salt = make_salt()
     h = hashlib.sha256(name + pw + salt).hexdigest()
     return '%s,%s' % (salt, h)
+
+def valid_pw(name, password, h):
+    salt = h.split(',')[0]
+    return h == make_pw_hash(name, password, salt)
+
 class User(db.Model):
     name = db.StringProperty(required = True)
     pw_hash = db.StringProperty(required = True)
@@ -74,16 +79,6 @@ class Post(db.Model):
     def getPost(cls, post_id):
         return Post.get_by_id(int(post_id))
 
-    @classmethod
-    def deletePost(cls, post_id):
-        post = Post.get_by_id(int(post_id))
-        if post:
-            #post.key().delete()
-            db.delete(post)
-            return True
-        else:
-            return False
-
 
 class LikePost(db.Model):
     like_post = db.StringProperty(required = True)
@@ -108,16 +103,6 @@ class LikePost(db.Model):
         likes = LikePost.all().filter('like_post =', post_id)
         return likes.count()
 
-    @classmethod
-    def deleteLike(cls, like_id):
-        like = LikePost.get_by_id(int(like_id))
-        if like:
-            like.key().delete()
-            return True
-        else:
-            return False
-
-
 
 class Comment(db.Model):
     comment_post = db.StringProperty(required = True)
@@ -140,13 +125,3 @@ class Comment(db.Model):
                    comment_author = str(author))
         c.put()
         return c.key().id()
-
-    @classmethod
-    def deleteComment(cls, comment_id):
-        comment = Comment.get_by_id(int(comment_id))
-        print "hiii"
-        if comment:
-            comment.key().delete()
-            return True
-        else:
-            return False

@@ -82,10 +82,6 @@ class MainPage(Handler):
         posts = Post.all()
         self.render('blogs.html', posts = posts)
 
-def valid_pw(name, password, h):
-    salt = h.split(',')[0]
-    return h == make_pw_hash(name, password, salt)
-
 USER_RE = re.compile(r"^[a-zA-Z0-9_-]{3,20}$")
 def valid_username(username):
     return username and USER_RE.match(username)
@@ -200,7 +196,9 @@ class BlogHandler(Handler):
         comments = Comment.getCommentsByPostId(post_id)
         comments_count = comments.count()
         like_text = 'Like'
-        liked = LikePost.getLikeByPostAndAuthor(post_id, self.user.name)
+        liked = None
+        if self.user:
+            liked = LikePost.getLikeByPostAndAuthor(post_id, self.user.name)
 
         # if self.user:
         #     user = self.user
@@ -223,9 +221,8 @@ class BlogHandler(Handler):
 
         elif self.request.get("delete"):
             if post.author == self.user.name:
-                ret = Post.deletePost(post_id)
+                db.delete(post)
                 time.sleep(0.1)
-            if ret:
                 return self.redirect('/')
 
         elif self.request.get("add_comment"):
@@ -365,7 +362,7 @@ app = webapp2.WSGIApplication([
     ('/signup', Register),
     ('/login', Login),
     ('/logout', Logout),
-    ('/blog', BlogHandler),
+    ('/blog', MainPage),
     ('/blog/newpost', NewPostHandler),
     ('/blog/([0-9]+)', BlogHandler),
     ('/blog/edit/([0-9]+)', EditPostHandler),
