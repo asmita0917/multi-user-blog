@@ -27,22 +27,26 @@ from google.appengine.ext import db
 from database import User, Post, Comment, LikePost
 
 template_dir = os.path.join(os.path.dirname(__file__), 'templates')
-jinja_env = jinja2.Environment(loader = jinja2.FileSystemLoader(template_dir),
-                               autoescape = True)
+jinja_env = jinja2.Environment(loader=jinja2.FileSystemLoader(template_dir),
+                               autoescape=True)
+file = open('secret.txt', 'r')
+secret = file.read()
 
-secret = 'JvWGciEbUQp4X1SsD5f0'
 
 def render_str(template, **params):
     t = jinja_env.get_template(template)
     return t.render(params)
 
+
 def make_secure_val(val):
     return '%s|%s' % (val, hmac.new(secret, val).hexdigest())
+
 
 def check_secure_val(secure_val):
     val = secure_val.split('|')[0]
     if secure_val == make_secure_val(val):
         return val
+
 
 class Handler(webapp2.RequestHandler):
     def write(self, *a, **kw):
@@ -78,21 +82,29 @@ class Handler(webapp2.RequestHandler):
 
 
 class MainPage(Handler):
-  def get(self):
+    def get(self):
         posts = Post.all()
-        self.render('blogs.html', posts = posts)
+        self.render('blogs.html', posts=posts)
 
 USER_RE = re.compile(r"^[a-zA-Z0-9_-]{3,20}$")
+
+
 def valid_username(username):
     return username and USER_RE.match(username)
 
+
 PASS_RE = re.compile(r"^.{3,20}$")
+
+
 def valid_password(password):
     return password and PASS_RE.match(password)
 
-EMAIL_RE  = re.compile(r'^[\S]+@[\S]+\.[\S]+$')
+EMAIL_RE = re.compile(r'^[\S]+@[\S]+\.[\S]+$')
+
+
 def valid_email(email):
     return not email or EMAIL_RE.match(email)
+
 
 class Signup(Handler):
     def get(self):
@@ -105,8 +117,8 @@ class Signup(Handler):
         self.verify = self.request.get('verify')
         self.email = self.request.get('email')
 
-        params = dict(username = self.username,
-                      email = self.email)
+        params = dict(username=self.username,
+                      email=self.email)
 
         if not valid_username(self.username):
             params['error_username'] = "That's not a valid username."
@@ -132,22 +144,20 @@ class Signup(Handler):
         raise NotImplementedError
 
 
-
-
-
 class Register(Signup):
     def done(self):
-        #make sure the user doesn't already exist
+        # make sure the user doesn't already exist
         u = User.by_name(self.username)
         if u:
             msg = 'That user already exists.'
-            self.render('signup-form.html', error_username = msg, username=self.username, email=self.email)
+            self.render('signup-form.html', error_username=msg,
+                        username=self.username, email=self.email)
         else:
             u = User.register(self.username, self.password, self.email)
             u.put()
-
             self.login(u)
             self.redirect('/blog')
+
 
 class Login(Handler):
     def get(self):
@@ -163,13 +173,15 @@ class Login(Handler):
             self.redirect('/blog')
         else:
             msg = 'Invalid login'
-            self.render('login-form.html', error = msg)
+            self.render('login-form.html', error=msg)
+
 
 class Logout(Handler):
     def get(self):
         self.logout()
         self.redirect('/blog')
-        
+
+
 class NewPostHandler(Handler):
     def get(self):
         if self.user:
@@ -181,17 +193,17 @@ class NewPostHandler(Handler):
         if not self.user:
             return self.redirect('/')
         print self.user.name
-        post_id = Post.addPost(title = self.request.get('title'),
-                                        content = self.request.get('content'),
-                                        author = self.user.name)
+        post_id = Post.addPost(title=self.request.get('title'),
+                               content=self.request.get('content'),
+                               author=self.user.name)
         self.redirect('/blog/' + str(post_id))
+
 
 class BlogHandler(Handler):
     def get(self, post_id):
         post = Post.getPost(int(post_id))
         if not post:
-            return self.error()
-        #comments = None
+            return self.error(404)
         likes = LikePost.countByPost(post_id)
         comments = Comment.getCommentsByPostId(post_id)
         comments_count = comments.count()
@@ -206,14 +218,16 @@ class BlogHandler(Handler):
         #     if like:
         #         like_text = 'Liked'
         self.render("post.html", post=post, likes=likes,
-                    post_comments=comments, comments_count=comments_count, liked= liked)
+                    post_comments=comments, comments_count=comments_count,
+                    liked=liked)
+
     def post(self, post_id):
         if not self.user:
             return self.redirect('/')
         post = Post.getPost(int(post_id))
 
         if not post:
-            return self.redirect('/')
+            return self.error(404)
         if self.request.get("edit"):
             if post.author == self.user.name:
                     # take the user to edit post page
@@ -230,14 +244,15 @@ class BlogHandler(Handler):
             # check if there is anything entered in the comment text area
             if comment_text:
                 # add comment to the comments database and refresh page
-                Comment.addComment(post_id = post_id, text = comment_text,
-                 author = self.user.name)
+                Comment.addComment(post_id=post_id, text=comment_text,
+                                   author=self.user.name)
                 time.sleep(0.1)
                 self.redirect('/blog/%s' % str(post_id))
             # otherwise if nothing has been entered in the text area throw
             # an error
             else:
-                comment_error = "Please enter a comment in the text area to post"
+                comment_error = "Please enter a comment in \
+                                 the text area to post"
                 self.render(
                     "post.html",
                     post=post,
@@ -265,12 +280,19 @@ class BlogHandler(Handler):
 class EditPostHandler(Handler):
     def post(self, post_id):
         if not self.user:
-            return self.redirect('/')
+            return self.redirect('/login')
+        post = Post.getPost(int(post_id))
 
-        Post.editPost(title = self.request.get('title'),
-                               content = self.request.get('content'),
-                               author = self.user.name,
-                               post_id = post_id)
+        if post is None:
+            return self.error(404)
+
+        if post.author == self.user.name:
+            Post.editPost(title=self.request.get('title'),
+                          content=self.request.get('content'),
+                          author=self.user.name,
+                          post_id=post_id)
+        else:
+            self.response.out.write("You cannot edit other user's posts")
         self.redirect('/blog/' + str(post_id))
 
     def get(self, post_id):
@@ -290,8 +312,11 @@ class EditPostHandler(Handler):
         else:
             self.redirect("/login")
 
+
 class EditCommentHandler(Handler):
     def get(self, post_id, comment_id):
+        if not self.user:
+            return self.redirect('/login')
         # get the blog and comment from blog id and comment id
         comment = Comment.get_by_id(int(comment_id))
         # check if there is a comment associated with that id
@@ -300,7 +325,8 @@ class EditCommentHandler(Handler):
             if comment.comment_author == self.user.name:
                 # take the user to the edit comment page and load the content
                 # of the comment
-                self.render("editcomment.html", comment_text=comment.comment_text)
+                self.render("editcomment.html",
+                            comment_text=comment.comment_text)
             # otherwise if this user is the author of this comment throw and
             # error
             else:
@@ -313,31 +339,39 @@ class EditCommentHandler(Handler):
             self.render("editcomment.html", edit_error=error)
 
     def post(self, post_id, comment_id):
+        if not self.user:
+            return self.redirect('/login')
         # if the user clicks on update comment
         if self.request.get("update_comment"):
             # get the comment for that comment id
             comment = Comment.get_by_id(int(comment_id))
-            # check if this user is the author of this comment
-            if comment.comment_author == self.user.name:
-                # update the text of the comment and redirect to the post page
-                comment.comment_text = self.request.get('comment_text')
-                comment.put()
-                time.sleep(0.1)
-                self.redirect('/blog/%s' % str(post_id))
-            # otherwise if this user is the author of this comment throw and
-            # error
+            if comment is None:
+                error = "This comment no longer exists"
+                self.render("editcomment.html", edit_error=error)
             else:
-                error = "You cannot edit other users' comments'"
-                self.render(
-                    "editcomment.html",
-                    comment_text=comment.text,
-                    edit_error=error)
+                # check if this user is the author of this comment
+                if comment.comment_author == self.user.name:
+                    comment.comment_text = self.request.get('comment_text')
+                    comment.put()
+                    time.sleep(0.1)
+                    self.redirect('/blog/%s' % str(post_id))
+                # otherwise if this user is the author of this comment throw
+                # error
+                else:
+                    error = "You cannot edit other users' comments'"
+                    self.render(
+                        "editcomment.html",
+                        comment_text=comment.text,
+                        edit_error=error)
         # if the user clicks on cancel take the user to the post page
         elif self.request.get("cancel"):
             self.redirect('/blog/%s' % str(post_id))
 
+
 class DeleteCommentHandler(Handler):
     def get(self, post_id, comment_id):
+        if not self.user:
+            return self.redirect('/login')
         # get the comment from the comment id
         comment = Comment.get_by_id(int(comment_id))
         # check if there is a comment associated with that id
