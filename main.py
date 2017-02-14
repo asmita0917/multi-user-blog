@@ -24,7 +24,7 @@ import jinja2
 import time
 
 from google.appengine.ext import db
-from database import User, Post, Comment, Like
+from database import User, Post, Comment, LikePost
 
 template_dir = os.path.join(os.path.dirname(__file__), 'templates')
 jinja_env = jinja2.Environment(loader = jinja2.FileSystemLoader(template_dir),
@@ -81,10 +81,6 @@ class MainPage(Handler):
   def get(self):
         posts = Post.all()
         self.render('blogs.html', posts = posts)
-
-
-
-
 
 def valid_pw(name, password, h):
     salt = h.split(',')[0]
@@ -177,14 +173,6 @@ class Logout(Handler):
     def get(self):
         self.logout()
         self.redirect('/blog')
-
-class BlogFront(Handler):
-    def get(self):
-        if self.user:
-            print self.user.name
-            self.response.write('Welcome %s to Multi User Blog!' % self.user.name.title())
-        else:
-            self.redirect("/login")
         
 class NewPostHandler(Handler):
     def get(self):
@@ -208,22 +196,26 @@ class BlogHandler(Handler):
         if not post:
             return self.error()
         #comments = None
-        likes = None
+        likes = LikePost.countByPost(post_id)
         comments = Comment.getCommentsByPostId(post_id)
         comments_count = comments.count()
         like_text = 'Like'
+        liked = LikePost.getLikeByPostAndAuthor(post_id, self.user.name)
+
         # if self.user:
         #     user = self.user
         #     like = LikePost.getLikeByPostAndAuthor(post_id, user.user_name)
         #     if like:
         #         like_text = 'Liked'
         self.render("post.html", post=post, likes=likes,
-                    post_comments=comments, comments_count=comments_count)
+                    post_comments=comments, comments_count=comments_count, liked= liked)
     def post(self, post_id):
         if not self.user:
             return self.redirect('/')
         post = Post.getPost(int(post_id))
 
+        if not post:
+            return self.redirect('/')
         if self.request.get("edit"):
             if post.author == self.user.name:
                     # take the user to edit post page
@@ -243,8 +235,8 @@ class BlogHandler(Handler):
                 # add comment to the comments database and refresh page
                 Comment.addComment(post_id = post_id, text = comment_text,
                  author = self.user.name)
-                
-                self.redirect('/blog/%s' % str(post.key().id()))
+                time.sleep(0.1)
+                self.redirect('/blog/%s' % str(post_id))
             # otherwise if nothing has been entered in the text area throw
             # an error
             else:
@@ -258,10 +250,21 @@ class BlogHandler(Handler):
                     post_comments=post_comments,
                     comment_error=comment_error)
 
-class DeletePostHandler(Handler):
-    pass
-class PostHandler(Handler):
-    pass
+        elif self.request.get("like"):
+            like = LikePost.getLikeByPostAndAuthor(post_id, self.user.name)
+            if not like:
+                LikePost.addLike(post_id, self.user.name)
+            time.sleep(0.1)
+            self.redirect('/blog/%s' % str(post_id))
+
+        elif self.request.get("unlike"):
+            like = LikePost.getLikeByPostAndAuthor(post_id, self.user.name)
+            if like:
+                db.delete(like)
+            time.sleep(0.1)
+            self.redirect('/blog/%s' % str(post_id))
+
+
 class EditPostHandler(Handler):
     def post(self, post_id):
         if not self.user:
@@ -362,9 +365,7 @@ app = webapp2.WSGIApplication([
     ('/signup', Register),
     ('/login', Login),
     ('/logout', Logout),
-    ('/blog/?', BlogFront),
     ('/blog', BlogHandler),
-    ('/blog/delete', DeletePostHandler),
     ('/blog/newpost', NewPostHandler),
     ('/blog/([0-9]+)', BlogHandler),
     ('/blog/edit/([0-9]+)', EditPostHandler),

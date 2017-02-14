@@ -11,12 +11,16 @@
 {% if user %}
     <form method="POST">
         {% if user.name !=  post.author%}
-          <input type="submit" class="btn btn-success" name='like' value='&#128077; {{likes}} likes'>
-          <input type="submit" class="btn btn-warning" name='unlike' value='&#128078; {{unlikes}} unlikes'>
+          {% if liked %}
+              <input type="submit" class="btn btn-warning" name='unlike' value='&#128078; Unlike'>
+          {% else %}
+             <input type="submit" class="btn btn-success" name='like' value='&#128077; Like'>
+          {% endif %}
         {% else %}
           <input type="submit" class="btn btn-info" name='edit' value='&#9998; edit'>
           <input type="submit" class="btn btn-danger" name='delete' value="&#9003; delete">
         {% endif %}
+        ({{likes}}) Likes
     </form>
     <span class="alert-danger">{{error}}</span>
 {% endif %}
